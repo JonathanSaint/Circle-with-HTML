@@ -1,0 +1,75 @@
+<form id="loginForm">
+  <input type="email" name="email" placeholder="Email" required>
+  <input type="password" name="password" placeholder="Password" required>
+  <button type="submit">Login</button>
+</form>
+
+<script type="module" src="login.js"></script>
+<button id="logoutBtn">Logout</button>
+<script type="module" src="logout.js"></script>
+<script type="module">
+import { auth, googleProvider, facebookProvider, appleProvider }
+from './firebase.js';
+
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+
+// =============== EMAIL SIGNUP ===============
+const signupForm = document.getElementById("signupForm");
+
+if (signupForm) {
+  signupForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const email = signupForm.email.value;
+    const password = signupForm.password.value;
+
+    createUserWithEmailAndPassword(auth, email, password)
+      .then(() => {
+        alert("Account created!");
+        window.location.href = "home.html";
+      })
+      .catch((err) => alert(err.message));
+  });
+}
+
+
+// =============== EMAIL LOGIN ===============
+const loginForm = document.getElementById("loginForm");
+
+if (loginForm) {
+  loginForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const email = loginForm.email.value;
+    const password = loginForm.password.value;
+
+    signInWithEmailAndPassword(auth, email, password)
+      .then(() => {
+        alert("Logged in!");
+        window.location.href = "home.html";
+      })
+      .catch((err) => alert(err.message));
+  });
+}
+
+
+// =============== GOOGLE LOGIN ===============
+document.getElementById("googleLogin")?.addEventListener("click", () => {
+  signInWithPopup(auth, googleProvider)
+    .then(() => window.location.href = "home.html")
+    .catch((err) => alert(err.message));
+});
+
+document.getElementById("googleSignup")?.addEventListener("click", () => {
+  signInWithPopup(auth, googleProvider)
+    .then(() => window.location.href = "home.html")
+    .catch((err) => alert(err.message));
+
+});
+</script>
+
