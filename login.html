@@ -1,75 +1,75 @@
-<form id="loginForm">
-  <input type="email" name="email" placeholder="Email" required>
-  <input type="password" name="password" placeholder="Password" required>
-  <button type="submit">Login</button>
-</form>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circle - Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
 
-<script type="module" src="login.js"></script>
-<button id="logoutBtn">Logout</button>
-<script type="module" src="logout.js"></script>
-<script type="module">
-import { auth, googleProvider, facebookProvider, appleProvider }
-from './firebase.js';
+<body>
 
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signInWithPopup
-} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+<!-- ================= POPUPS ================= -->
 
+<!-- Login Popup -->
+<div id="loginPopup" class="popup-overlay">
+    <div class="popup-box">
+        <h2>Login to Circle</h2>
 
-// =============== EMAIL SIGNUP ===============
-const signupForm = document.getElementById("signupForm");
+        <form id="loginForm">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit" class="submit-btn">Login</button>
+        </form>
 
-if (signupForm) {
-  signupForm.addEventListener("submit", (e) => {
-    e.preventDefault();
+        <button class="close-btn">Close</button>
+    </div>
+</div>
 
-    const email = signupForm.email.value;
-    const password = signupForm.password.value;
+<!-- Signup Popup -->
+<div id="signupPopup" class="popup-overlay">
+    <div class="popup-box">
+        <h2>Create an Account</h2>
 
-    createUserWithEmailAndPassword(auth, email, password)
-      .then(() => {
-        alert("Account created!");
-        window.location.href = "home.html";
-      })
-      .catch((err) => alert(err.message));
-  });
-}
+        <form id="signupForm">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit" class="submit-btn">Sign Up</button>
+        </form>
 
+        <button class="close-btn">Close</button>
+    </div>
+</div>
 
-// =============== EMAIL LOGIN ===============
-const loginForm = document.getElementById("loginForm");
+<!-- ================= PAGE CONTENT ================= -->
 
-if (loginForm) {
-  loginForm.addEventListener("submit", (e) => {
-    e.preventDefault();
+<div class="animated-bg">
+    <span></span><span></span><span></span><span></span><span></span>
+</div>
 
-    const email = loginForm.email.value;
-    const password = loginForm.password.value;
+<div class="container">
+    <div class="logo">
+        <div class="circle-icon"></div>
+    </div>
 
-    signInWithEmailAndPassword(auth, email, password)
-      .then(() => {
-        alert("Logged in!");
-        window.location.href = "home.html";
-      })
-      .catch((err) => alert(err.message));
-  });
-}
+    <h1 class="title">Circle</h1>
+    <p class="tagline">Real people. Real posts. Real connection.</p>
 
+    <div class="buttons">
+        <button class="email-btn">Continue with Email</button>
+        <button class="login-full">Log in into Your Account</button>
+    </div>
+</div>
 
-// =============== GOOGLE LOGIN ===============
-document.getElementById("googleLogin")?.addEventListener("click", () => {
-  signInWithPopup(auth, googleProvider)
-    .then(() => window.location.href = "home.html")
-    .catch((err) => alert(err.message));
-});
+<section class="about-section">
+    <h2>What is Circle?</h2>
+    <p>Circle is a modern social platform built for real connections...</p>
+    <p>No fake popularity. No manipulation.</p>
+    <p>Made for students, teachers and workmates.</p>
+</section>
 
-document.getElementById("googleSignup")?.addEventListener("click", () => {
-  signInWithPopup(auth, googleProvider)
-    .then(() => window.location.href = "home.html")
-    .catch((err) => alert(err.message));
-
-});
-</script>
-
+<footer class="custom-footer fade-in">
+    <p>Built with love by <span class="myname">Jonathan Arinda</span></p>
+</footer>
+</body>
+</html>

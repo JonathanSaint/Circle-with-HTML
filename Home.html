@@ -5,21 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Circle - Login</title>
     <link rel="stylesheet" href="style.css">
-    <script type="module" src="firebase.js"></script>
-    <script type="module">
-import { auth } from './firebase.js';
-import { onAuthStateChanged }
-from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    window.location.href = "login.html";
-  }
-});
-</script>
-
-</head>
-<!-- Login Popup -->
+ <!-- Login Popup -->
 <div id="loginPopup" class="popup-overlay">
   <div class="popup-box">
       <h2>Login to Circle</h2>
@@ -30,16 +16,9 @@ onAuthStateChanged(auth, (user) => {
           <button type="submit" class="submit-btn">Login</button>
       </form>
 
-      <div class="social-row">
-        <button id="googleLogin" class="social-btn google">Google</button>
-        <button id="facebookLogin" class="social-btn facebook">Facebook</button>
-        <button id="appleLogin" class="social-btn apple">Apple</button>
-      </div>
-
       <button class="close-btn">Close</button>
   </div>
 </div>
-
 
 <!-- Signup Popup -->
 <div id="signupPopup" class="popup-overlay">
@@ -55,9 +34,71 @@ onAuthStateChanged(auth, (user) => {
       <button class="close-btn">Close</button>
   </div>
 </div>
-
+</head>
 <body>
+    <script>
+document.addEventListener("DOMContentLoaded", () => {
+    const loginPopup = document.getElementById("loginPopup");
+    const signupPopup = document.getElementById("signupPopup");
 
+    const emailBtn = document.querySelector(".email-btn");
+    const loginBtn = document.querySelector(".login-full");
+    const closeBtns = document.querySelectorAll(".close-btn");
+
+    // OPEN SIGNUP POPUP
+    emailBtn.addEventListener("click", () => {
+        signupPopup.style.display = "flex";
+    });
+
+    // OPEN LOGIN POPUP
+    loginBtn.addEventListener("click", () => {
+        loginPopup.style.display = "flex";
+    });
+
+    // CLOSE POPUPS
+    closeBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            loginPopup.style.display = "none";
+            signupPopup.style.display = "none";
+        });
+    });
+});
+</script>
+<script type="module">
+// FORMS
+const signupForm = document.getElementById("signupForm");
+const loginForm = document.getElementById("loginForm");
+
+// SIGNUP
+signupForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const email = signupForm.email.value;
+    const password = signupForm.password.value;
+
+    createUserWithEmailAndPassword(auth, email, password)
+        .then(() => {
+            alert("Account created successfully!");
+            window.location.href = "home.html"; // redirect to homepage
+        })
+        .catch((error) => alert(error.message));
+});
+
+// LOGIN
+loginForm?.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const email = loginForm.email.value;
+    const password = loginForm.password.value;
+
+    signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+            alert("Login successful!");
+            window.location.href = "home.html"; // redirect to homepage
+        })
+        .catch((error) => alert(error.message));
+});
+</script>
     <!-- Animated background elements -->
     <div class="animated-bg">
         <span></span><span></span><span></span><span></span><span></span>
@@ -76,26 +117,12 @@ onAuthStateChanged(auth, (user) => {
         <!-- Tagline -->
         <p class="tagline">Real people. Real posts. Real connection.</p>
 
-        <!-- Buttons -->
-        <div class="buttons">
-            <button class="email-btn">Continue with Email</button>
-
-            <div class="social-row">
-                <button class="social-btn google">
-                    <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="google">
-                </button>
-                <button class="social-btn apple">
-                    <img src="https://www.svgrepo.com/show/503173/apple-logo.svg" alt="apple">
-                </button>
-                <button class="social-btn facebook">
-                    <img src="https://www.svgrepo.com/show/448224/facebook.svg" alt="facebook">
-                </button>
-            </div>
-
-            <button class="facebook-full">Facebook</button>
-        </div>
-
-        <p class="footer">Already have an account? <a href="#">Log in</a></p>
+       <!-- Buttons -->
+      <div class="buttons">
+       <button class="email-btn">Continue with Email</button>
+       <button class="login-full">Login into Your Account</button>
+      </div>
+ 
     </div>
 
     <!-- WHAT CIRCLE IS ABOUT -->
@@ -132,119 +159,7 @@ onAuthStateChanged(auth, (user) => {
     </div>
 
     <p class="copyright">© 2025 Circle. All Rights Reserved.</p>
+    
 </footer>
 </body>
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-    const loginPopup = document.getElementById("loginPopup");
-    const signupPopup = document.getElementById("signupPopup");
-
-    const emailBtn = document.querySelector(".email-btn");
-    const loginLink = document.querySelector(".footer a");
-
-    const closeBtns = document.querySelectorAll(".close-btn");
-
-
-    // OPEN SIGNUP POPUP
-    emailBtn.addEventListener("click", () => {
-        signupPopup.style.display = "flex";
-    });
-
-    // OPEN LOGIN POPUP
-    loginLink.addEventListener("click", (e) => {
-        e.preventDefault();
-        loginPopup.style.display = "flex";
-    });
-
-    // CLOSE BOTH POPUPS
-    closeBtns.forEach(btn => {
-        btn.addEventListener("click", () => {
-            loginPopup.style.display = "none";
-            signupPopup.style.display = "none";
-        });
-    });
-});
-</script>
-<script type="module">
-import { auth } from "./firebase.js";
-import { 
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword 
-} 
-from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-
-// FORMS
-const signupForm = document.getElementById("signupForm");
-const loginForm = document.getElementById("loginForm");
-
-// SIGNUP
-signupForm?.addEventListener("submit", (e) => {
-    e.preventDefault();
-
-    const email = signupForm.email.value;
-    const password = signupForm.password.value;
-
-    createUserWithEmailAndPassword(auth, email, password)
-        .then(() => {
-            alert("Account created successfully!");
-            window.location.href = "home.html";
-        })
-        .catch((error) => showError(error.message, signupForm));
-});
-
-// LOGIN
-loginForm?.addEventListener("submit", (e) => {
-    e.preventDefault();
-
-    const email = loginForm.email.value;
-    const password = loginForm.password.value;
-
-    signInWithEmailAndPassword(auth, email, password)
-        .then(() => {
-            alert("Login successful!");
-            window.location.href = "home.html";
-        })
-        .catch((error) => showError(error.message, loginForm));
-});
-
-// ERROR DISPLAY FUNCTION
-function showError(message, form) {
-    let box = form.querySelector(".error-box");
-
-    if (!box) {
-        box = document.createElement("div");
-        box.classList.add("error-box");
-        form.prepend(box);
-    }
-
-    box.textContent = message;
-    box.classList.add("show");
-
-    setTimeout(() => {
-        box.classList.remove("show");
-    }, 3000);
-}
-</script>
-<!-- LOGIN POPUP -->
-<div id="loginPopup" class="popup">
-  <div class="popup-content">
-      <span id="closePopup" class="close">&times;</span>
-
-      <h2>Login to Circle</h2>
-
-      <!-- Email login -->
-      <input type="email" id="email" placeholder="Email">
-      <input type="password" id="password" placeholder="Password">
-
-      <button id="emailLoginBtn" class="popup-btn">Login with Email</button>
-
-      <div class="divider">OR</div>
-
-      <!-- Google login -->
-      <button id="googleLoginBtn" class="google-btn">
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg">
-          Continue with Google
-      </button>
-  </div>
-</div>
 </html>

@@ -123,17 +123,21 @@ body {
 }
 
 .email-btn {
+    width: 100%;
     padding: 14px 50px;
-    background: white;
+    background: linear-gradient(135deg, #f1dbba, #becaeb);
     border: none;
-    color: #444;
+    color: #978f8f;
     border-radius: 30px;
     font-size: 18px;
     cursor: pointer;
     font-weight: 500;
     transition: 0.25s;
 }
-
+.email-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(230, 230, 231, 0.4);
+}
 .email-btn:hover {
     transform: scale(1.05);
 }
@@ -415,23 +419,6 @@ body {
   cursor: pointer;
   font-weight: bold;
 }
-
-.google-btn {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px;
-  margin-top: 10px;
-  border-radius: 8px;
-  background: white;
-  color: black;
-  font-weight: bold;
-  border: none;
-  cursor: pointer;
-}
-
 .close {
   position: absolute;
   top: 20px;
@@ -444,4 +431,25 @@ body {
 .divider {
   margin: 15px 0;
   color: #bbb;
+}
+.login-full {
+    width: 100%;
+    padding: 14px 50px;
+    background: linear-gradient(135deg, #f1dbba, #becaeb);
+    border: none;
+    color: #978f8f;
+    border-radius: 30px;
+    font-size: 18px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: 0.25s;
+}
+
+.login-full:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(230, 230, 231, 0.4);
+}
+
+.login-full:active {
+    transform: scale(1.05);
 }
