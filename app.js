@@ -68,21 +68,36 @@ messageInput.addEventListener("keydown", e => {
 });
 
 // ─── Listen for Messages (Real-time) ──────────────────────────────
+const renderedIds = new Set();
+
 db.collection("messages")
   .orderBy("timestamp")
-  .onSnapshot(snapshot => {
+  .onSnapshot({ includeMetadataChanges: true }, snapshot => {
     // Remove welcome message once real messages arrive
     const welcome = chatDiv.querySelector(".welcome-msg");
     if (welcome && snapshot.size > 0) welcome.remove();
 
     snapshot.docChanges().forEach(change => {
-      if (change.type === "added") {
-        const data = change.doc.data();
+      const doc = change.doc;
+      const data = doc.data();
+      const id = doc.id;
 
-        // Skip messages with no timestamp yet (optimistic writes)
-        if (!data.timestamp) return;
+      if (change.type === "added" && !renderedIds.has(id)) {
+        renderedIds.add(id);
+        // Use local pending timestamp if server timestamp not yet resolved
+        const time = data.timestamp
+          ? new Date(data.timestamp.toMillis()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        renderMessage(data, id, time);
+      }
 
-        renderMessage(data);
+      // When server timestamp resolves, update the time on the bubble
+      if (change.type === "modified" && data.timestamp) {
+        const existing = chatDiv.querySelector(`[data-id="${id}"] .msg-time`);
+        if (existing) {
+          existing.textContent = new Date(data.timestamp.toMillis())
+            .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        }
       }
     });
 
@@ -95,18 +110,15 @@ db.collection("messages")
   });
 
 // ─── Render a Single Message ───────────────────────────────────────
-function renderMessage(data) {
+function renderMessage(data, id, time) {
   const isMine = data.user === currentUser;
 
   const wrapper = document.createElement("div");
   wrapper.classList.add("msg-wrapper", isMine ? "mine" : "theirs");
+  wrapper.dataset.id = id;
 
   const bubble = document.createElement("div");
   bubble.classList.add("bubble");
-
-  const time = data.timestamp
-    ? new Date(data.timestamp.toMillis()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "";
 
   bubble.innerHTML = `
     ${!isMine ? `<div class="msg-user">${escapeHtml(data.user)}</div>` : ""}
