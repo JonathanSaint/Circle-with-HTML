@@ -1,4 +1,4 @@
-// Your Firebase config (you will get this from Firebase)
+// ─── Firebase Config ───────────────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyDUSCi_iVm6ZBeT97slFcPUc0mWfsDcqhY",
   authDomain: "chatrr-5fbc7.firebaseapp.com",
@@ -13,44 +13,123 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+// ─── State ─────────────────────────────────────────────────────────
+let currentUser = null;
+
 const chatDiv = document.getElementById("chat");
+const messageInput = document.getElementById("messageInput");
+const sendBtn = document.getElementById("sendBtn");
 
-// Send message
-function sendMessage() {
-  const input = document.getElementById("messageInput");
-  const username = document.getElementById("username");
+// ─── Set Username ──────────────────────────────────────────────────
+function setUsername() {
+  const input = document.getElementById("username");
+  const name = input.value.trim();
+  if (!name) return;
 
-  if (!input.value || !username.value) return;
+  currentUser = name;
 
-  db.collection("messages").add({
-    text: input.value,
-    user: username.value,
-    timestamp: Date.now()
-  });
+  // Hide name bar, show label
+  document.getElementById("name-bar").classList.add("hidden");
+  const label = document.getElementById("user-label");
+  label.textContent = "You are chatting as " + name;
+  label.classList.remove("hidden");
 
-  input.value = "";
+  // Enable message input
+  messageInput.disabled = false;
+  sendBtn.disabled = false;
+  messageInput.focus();
 }
 
-// Display messages
+// Allow pressing Enter on username input
+document.getElementById("username").addEventListener("keydown", e => {
+  if (e.key === "Enter") setUsername();
+});
+
+// ─── Send Message ──────────────────────────────────────────────────
+function sendMessage() {
+  const text = messageInput.value.trim();
+  if (!text || !currentUser) return;
+
+  db.collection("messages").add({
+    text: text,
+    user: currentUser,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(err => {
+    showError("Failed to send message. Check Firestore rules.");
+    console.error(err);
+  });
+
+  messageInput.value = "";
+}
+
+// Allow pressing Enter to send
+messageInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") sendMessage();
+});
+
+// ─── Listen for Messages (Real-time) ──────────────────────────────
 db.collection("messages")
   .orderBy("timestamp")
   .onSnapshot(snapshot => {
-    chatDiv.innerHTML = "";
+    // Remove welcome message once real messages arrive
+    const welcome = chatDiv.querySelector(".welcome-msg");
+    if (welcome && snapshot.size > 0) welcome.remove();
 
-    snapshot.forEach(doc => {
-      const data = doc.data();
+    snapshot.docChanges().forEach(change => {
+      if (change.type === "added") {
+        const data = change.doc.data();
 
-      const msg = document.createElement("div");
-      msg.classList.add("message");
+        // Skip messages with no timestamp yet (optimistic writes)
+        if (!data.timestamp) return;
 
-      msg.innerHTML = `
-        <div class="username">${data.user}</div>
-        <div>${data.text}</div>
-      `;
-
-      chatDiv.appendChild(msg);
+        renderMessage(data);
+      }
     });
 
     // Auto scroll to bottom
     chatDiv.scrollTop = chatDiv.scrollHeight;
+
+  }, err => {
+    console.error("Firestore error:", err);
+    showError("⚠️ Could not connect. Make sure Firestore is enabled in your Firebase console and rules allow read/write.");
   });
+
+// ─── Render a Single Message ───────────────────────────────────────
+function renderMessage(data) {
+  const isMine = data.user === currentUser;
+
+  const wrapper = document.createElement("div");
+  wrapper.classList.add("msg-wrapper", isMine ? "mine" : "theirs");
+
+  const bubble = document.createElement("div");
+  bubble.classList.add("bubble");
+
+  const time = data.timestamp
+    ? new Date(data.timestamp.toMillis()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  bubble.innerHTML = `
+    ${!isMine ? `<div class="msg-user">${escapeHtml(data.user)}</div>` : ""}
+    <div class="msg-text">${escapeHtml(data.text)}</div>
+    <div class="msg-time">${time}</div>
+  `;
+
+  wrapper.appendChild(bubble);
+  chatDiv.appendChild(wrapper);
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function showError(msg) {
+  const err = document.createElement("div");
+  err.className = "error-banner";
+  err.textContent = msg;
+  chatDiv.prepend(err);
+}
