@@ -36,6 +36,12 @@
     </div>
   </div>
 
+  <!-- Vercel Analytics -->
+  <script type="module">
+    import { inject } from './node_modules/@vercel/analytics/dist/index.mjs';
+    inject();
+  </script>
+
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
