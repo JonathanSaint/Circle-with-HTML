@@ -11,39 +11,115 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// Firebase persists auth sessions in localStorage by default —
+// so the user stays signed in across browser restarts automatically.
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+// ─── DOM refs ──────────────────────────────────────────────────────
+const chatDiv      = document.getElementById("chat");
+const messageInput = document.getElementById("messageInput");
+const sendBtn      = document.getElementById("sendBtn");
+const loadingBar   = document.getElementById("loading-bar");
+const nameBar      = document.getElementById("name-bar");
+const userLabel    = document.getElementById("user-label");
+const userLabelTxt = document.getElementById("user-label-text");
 
 // ─── State ─────────────────────────────────────────────────────────
-let currentUser = null;
+let currentUser = null; // display name string
+let currentUID  = null; // Firebase UID
+let unsubMessages = null; // snapshot listener cleanup
 
-const chatDiv = document.getElementById("chat");
-const messageInput = document.getElementById("messageInput");
-const sendBtn = document.getElementById("sendBtn");
+// ─── Auth: sign in anonymously and restore session ─────────────────
+auth.onAuthStateChanged(async firebaseUser => {
+  if (firebaseUser) {
+    // Already signed in (returning visitor or just signed in)
+    currentUID = firebaseUser.uid;
+    await restoreOrPromptName(firebaseUser.uid);
+  } else {
+    // First ever visit — sign in anonymously
+    try {
+      const result = await auth.signInAnonymously();
+      currentUID = result.user.uid;
+      await restoreOrPromptName(result.user.uid);
+    } catch (err) {
+      console.error("Auth failed:", err);
+      showError("Could not sign you in. Please refresh.");
+    }
+  }
+});
 
-// ─── Set Username ──────────────────────────────────────────────────
-function setUsername() {
-  const input = document.getElementById("username");
-  const name = input.value.trim();
-  if (!name) return;
+// ─── Restore saved name or ask for one ────────────────────────────
+async function restoreOrPromptName(uid) {
+  loadingBar.classList.add("hidden");
 
-  currentUser = name;
-
-  // Hide name bar, show label
-  document.getElementById("name-bar").classList.add("hidden");
-  const label = document.getElementById("user-label");
-  label.textContent = "You are chatting as " + name;
-  label.classList.remove("hidden");
-
-  // Enable message input
-  messageInput.disabled = false;
-  sendBtn.disabled = false;
-  messageInput.focus();
+  try {
+    const doc = await db.collection("users").doc(uid).get();
+    if (doc.exists && doc.data().name) {
+      // Returning user — restore their name silently
+      activateUser(doc.data().name);
+    } else {
+      // New user — show name input
+      nameBar.classList.remove("hidden");
+      document.getElementById("username").focus();
+    }
+  } catch (err) {
+    console.error("Could not fetch user profile:", err);
+    nameBar.classList.remove("hidden");
+  }
 }
 
-// Allow pressing Enter on username input
+// ─── Set username (new users) ──────────────────────────────────────
+async function setUsername() {
+  const input = document.getElementById("username");
+  const name  = input.value.trim();
+  if (!name || !currentUID) return;
+
+  // Save name to Firestore under their UID
+  try {
+    await db.collection("users").doc(currentUID).set({ name }, { merge: true });
+    activateUser(name);
+  } catch (err) {
+    showError("Could not save your name. Check Firestore rules.");
+    console.error(err);
+  }
+}
+
 document.getElementById("username").addEventListener("keydown", e => {
   if (e.key === "Enter") setUsername();
 });
+
+// ─── Change name ───────────────────────────────────────────────────
+async function changeName() {
+  const newName = prompt("Enter a new display name:", currentUser || "");
+  if (!newName || !newName.trim() || !currentUID) return;
+
+  try {
+    await db.collection("users").doc(currentUID).set({ name: newName.trim() }, { merge: true });
+    activateUser(newName.trim());
+  } catch (err) {
+    showError("Could not update your name.");
+    console.error(err);
+  }
+}
+
+// ─── Activate the chat UI once user is identified ─────────────────
+function activateUser(name) {
+  currentUser = name;
+
+  nameBar.classList.add("hidden");
+  userLabel.classList.remove("hidden");
+  userLabelTxt.textContent = "Chatting as " + name;
+
+  messageInput.disabled = false;
+  sendBtn.disabled = false;
+  messageInput.focus();
+
+  // Start listening for messages now that we know who we are
+  startMessageListener();
+}
 
 // ─── Send Message ──────────────────────────────────────────────────
 function sendMessage() {
@@ -51,8 +127,9 @@ function sendMessage() {
   if (!text || !currentUser) return;
 
   db.collection("messages").add({
-    text: text,
+    text,
     user: currentUser,
+    uid: currentUID,
     timestamp: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(err => {
     showError("Failed to send message. Check Firestore rules.");
@@ -62,56 +139,58 @@ function sendMessage() {
   messageInput.value = "";
 }
 
-// Allow pressing Enter to send
 messageInput.addEventListener("keydown", e => {
   if (e.key === "Enter") sendMessage();
 });
 
-// ─── Listen for Messages (Real-time) ──────────────────────────────
+// ─── Real-time Message Listener ────────────────────────────────────
 const renderedIds = new Set();
 
-db.collection("messages")
-  .orderBy("timestamp")
-  .onSnapshot({ includeMetadataChanges: true }, snapshot => {
-    // Remove welcome message once real messages arrive
-    const welcome = chatDiv.querySelector(".welcome-msg");
-    if (welcome && snapshot.size > 0) welcome.remove();
+function startMessageListener() {
+  if (unsubMessages) unsubMessages(); // clean up any old listener
 
-    snapshot.docChanges().forEach(change => {
-      const doc = change.doc;
-      const data = doc.data();
-      const id = doc.id;
+  unsubMessages = db.collection("messages")
+    .orderBy("timestamp")
+    .onSnapshot({ includeMetadataChanges: true }, snapshot => {
+      const welcome = chatDiv.querySelector(".welcome-msg");
+      if (welcome && snapshot.size > 0) welcome.remove();
 
-      if (change.type === "added" && !renderedIds.has(id)) {
-        renderedIds.add(id);
-        // Use local pending timestamp if server timestamp not yet resolved
-        const time = data.timestamp
-          ? new Date(data.timestamp.toMillis()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        renderMessage(data, id, time);
-      }
+      snapshot.docChanges().forEach(change => {
+        const doc  = change.doc;
+        const data = doc.data();
+        const id   = doc.id;
 
-      // When server timestamp resolves, update the time on the bubble
-      if (change.type === "modified" && data.timestamp) {
-        const existing = chatDiv.querySelector(`[data-id="${id}"] .msg-time`);
-        if (existing) {
-          existing.textContent = new Date(data.timestamp.toMillis())
-            .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        if (change.type === "added" && !renderedIds.has(id)) {
+          renderedIds.add(id);
+          const time = data.timestamp
+            ? new Date(data.timestamp.toMillis()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          renderMessage(data, id, time);
         }
-      }
+
+        if (change.type === "modified" && data.timestamp) {
+          const timeEl = chatDiv.querySelector(`[data-id="${id}"] .msg-time`);
+          if (timeEl) {
+            timeEl.textContent = new Date(data.timestamp.toMillis())
+              .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          }
+        }
+      });
+
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+
+    }, err => {
+      console.error("Firestore error:", err);
+      showError("Could not connect. Check Firestore rules in your Firebase console.");
     });
+}
 
-    // Auto scroll to bottom
-    chatDiv.scrollTop = chatDiv.scrollHeight;
-
-  }, err => {
-    console.error("Firestore error:", err);
-    showError("⚠️ Could not connect. Make sure Firestore is enabled in your Firebase console and rules allow read/write.");
-  });
-
-// ─── Render a Single Message ───────────────────────────────────────
+// ─── Render a Message Bubble ───────────────────────────────────────
 function renderMessage(data, id, time) {
-  const isMine = data.user === currentUser;
+  // Match on UID if available, fallback to name
+  const isMine = currentUID
+    ? data.uid === currentUID
+    : data.user === currentUser;
 
   const wrapper = document.createElement("div");
   wrapper.classList.add("msg-wrapper", isMine ? "mine" : "theirs");
@@ -128,6 +207,26 @@ function renderMessage(data, id, time) {
 
   wrapper.appendChild(bubble);
   chatDiv.appendChild(wrapper);
+}
+
+// ─── Clear Chat ────────────────────────────────────────────────────
+async function clearChat() {
+  const confirmed = confirm("Clear the entire chat for everyone? This cannot be undone.");
+  if (!confirmed) return;
+
+  try {
+    const snapshot = await db.collection("messages").get();
+    const batch = db.batch();
+    snapshot.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+
+    // Clear UI
+    chatDiv.innerHTML = '<div class="welcome-msg">👋 Say something to people nearby...</div>';
+    renderedIds.clear();
+  } catch (err) {
+    showError("Could not clear chat. Check Firestore rules.");
+    console.error(err);
+  }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────
