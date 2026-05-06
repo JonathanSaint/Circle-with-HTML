@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>Nearby Chat</title>
+  <title>NearbyChat</title>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -13,31 +13,28 @@
   <div class="app">
     <header>
       <div class="header-inner">
-        <span class="logo">&#9678; Circle</span>
+        <span class="logo">◎ NearbyChat</span>
         <div class="status-dot"></div>
       </div>
 
-      <!-- Shown while Firebase auth is resolving -->
-      <div id="loading-bar" class="user-label muted">Signing you in...</div>
-
-      <!-- Shown only for new users (no saved name yet) -->
+      <!-- New users: enter name -->
       <div id="name-bar" class="hidden">
         <input id="username" placeholder="Enter your name to join..." maxlength="24" autocomplete="off" />
         <button id="joinBtn" onclick="setUsername()">Join</button>
       </div>
 
-      <!-- Shown for returning / already signed-in users -->
+      <!-- Returning users: name + actions -->
       <div id="user-label" class="user-label hidden">
         <span id="user-label-text"></span>
         <div class="header-actions">
-          <button id="changeNameBtn" onclick="changeName()">Change name</button>
-          <button id="clearBtn" onclick="clearChat()">🗑 Clear chat</button>
+          <button id="changeNameBtn" onclick="changeName()">Rename</button>
+          <button id="clearBtn" onclick="clearChat()">🗑 Clear</button>
         </div>
       </div>
     </header>
 
     <div id="chat" class="chat-area">
-      <div class="welcome-msg">&#128075; Say something to people nearby...</div>
+      <div class="welcome-msg">👋 Say something to people nearby...</div>
     </div>
 
     <div class="input-area">
@@ -51,9 +48,8 @@
     </div>
   </div>
 
-  <!-- Firebase -->
+  <!-- Firebase (no auth SDK needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>
 </body>

@@ -2,29 +2,32 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:       #0a0f1e;
-  --surface:  #111827;
-  --surface2: #1f2937;
-  --accent:   #38bdf8;
-  --accent2:  #818cf8;
-  --text:     #f1f5f9;
-  --muted:    #64748b;
-  --mine-bg:  #1d4ed8;
-  --theirs-bg:#1f2937;
-  --radius:   18px;
+  --bg:        #0a0f1e;
+  --surface:   #111827;
+  --surface2:  #1f2937;
+  --accent:    #38bdf8;
+  --text:      #f1f5f9;
+  --muted:     #64748b;
+  --mine-bg:   #1d4ed8;
+  --theirs-bg: #1f2937;
+  --radius:    18px;
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'Space Mono', monospace;
 }
 
+html, body {
+  height: 100%;
+  height: -webkit-fill-available;
+}
+
 body {
-  margin: 0;
   font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 /* subtle grid background */
@@ -46,26 +49,31 @@ body::before {
   z-index: 1;
   width: 100%;
   max-width: 520px;
-  height: 100vh;
+  /* Use dvh so it shrinks when mobile keyboard opens */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--surface);
   border-left: 1px solid rgba(255,255,255,0.06);
   border-right: 1px solid rgba(255,255,255,0.06);
+  /* Respect notch/home bar on iOS */
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* ─── Header ───────────────────────────────────────────── */
 header {
   background: var(--surface);
   border-bottom: 1px solid rgba(255,255,255,0.07);
-  padding: 14px 18px 12px;
+  padding: 12px 16px 10px;
+  padding-top: calc(12px + env(safe-area-inset-top));
+  flex-shrink: 0;
 }
 
 .header-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .logo {
@@ -96,7 +104,7 @@ header {
 }
 
 #joinBtn {
-  padding: 8px 16px;
+  padding: 9px 16px;
   background: var(--accent);
   color: #0a0f1e;
   border: none;
@@ -106,66 +114,62 @@ header {
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
   transition: background 0.2s, transform 0.1s;
+  /* Minimum tap target */
+  min-height: 44px;
 }
-#joinBtn:hover  { background: #7dd3fc; }
 #joinBtn:active { transform: scale(0.97); }
 
+/* ─── User Label Row ───────────────────────────────────── */
 .user-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   font-size: 12px;
   color: var(--muted);
-  padding: 4px 0;
-}
-
-.user-label.muted {
-  justify-content: flex-start;
-  font-style: italic;
+  flex-wrap: wrap;
+  min-height: 28px;
 }
 
 .header-actions {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-shrink: 0;
+}
+
+#changeNameBtn, #clearBtn {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 30px;
+  transition: background 0.15s, color 0.15s;
 }
 
 #changeNameBtn {
-  padding: 4px 10px;
-  font-size: 11px;
-  font-family: var(--font-body);
-  font-weight: 500;
-  background: transparent;
   color: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
 }
-#changeNameBtn:hover {
-  background: var(--accent);
-  color: #0a0f1e;
-}
+#changeNameBtn:active { background: var(--accent); color: #0a0f1e; }
 
 #clearBtn {
-  padding: 4px 10px;
-  font-size: 11px;
-  font-family: var(--font-body);
-  font-weight: 500;
-  background: transparent;
   color: #f87171;
   border: 1px solid #f87171;
-  border-radius: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
 }
-#clearBtn:hover {
-  background: #f87171;
-  color: #0a0f1e;
+#clearBtn:active { background: #f87171; color: #0a0f1e; }
+
+/* hover states — desktop only */
+@media (hover: hover) {
+  #joinBtn:hover      { background: #7dd3fc; }
+  #changeNameBtn:hover { background: var(--accent); color: #0a0f1e; }
+  #clearBtn:hover      { background: #f87171; color: #0a0f1e; }
 }
 
 .hidden { display: none !important; }
@@ -174,14 +178,18 @@ header {
 .chat-area {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 14px;
+  overflow-x: hidden;
+  padding: 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   scroll-behavior: smooth;
+  /* Prevent rubber-band scroll from messing up layout */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-.chat-area::-webkit-scrollbar { width: 4px; }
+.chat-area::-webkit-scrollbar { width: 3px; }
 .chat-area::-webkit-scrollbar-track { background: transparent; }
 .chat-area::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 4px; }
 
@@ -199,7 +207,7 @@ header {
 }
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -207,8 +215,8 @@ header {
 .msg-wrapper.theirs { justify-content: flex-start; }
 
 .bubble {
-  max-width: 75%;
-  padding: 10px 14px 6px;
+  max-width: 78%;
+  padding: 9px 13px 5px;
   border-radius: var(--radius);
   line-height: 1.45;
   word-break: break-word;
@@ -249,20 +257,22 @@ header {
 .input-area {
   display: flex;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: var(--surface);
   border-top: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
 }
 
 input {
   flex: 1;
+  min-width: 0; /* prevents flex overflow on mobile */
   padding: 11px 14px;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.1);
   background: var(--surface2);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 16px; /* 16px prevents iOS zoom on focus */
   outline: none;
   transition: border-color 0.2s;
 }
@@ -272,8 +282,8 @@ input::placeholder { color: var(--muted); }
 input:disabled { opacity: 0.4; cursor: not-allowed; }
 
 #sendBtn {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -285,9 +295,12 @@ input:disabled { opacity: 0.4; cursor: not-allowed; }
   flex-shrink: 0;
   transition: background 0.2s, transform 0.1s;
 }
-#sendBtn:hover   { background: #7dd3fc; }
 #sendBtn:active  { transform: scale(0.95); }
 #sendBtn:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+
+@media (hover: hover) {
+  #sendBtn:hover { background: #7dd3fc; }
+}
 
 /* ─── Error Banner ─────────────────────────────────────── */
 .error-banner {
@@ -303,5 +316,8 @@ input:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ─── Mobile ───────────────────────────────────────────── */
 @media (max-width: 520px) {
-  .app { border: none; }
+  .app {
+    border: none;
+    max-width: 100%;
+  }
 }

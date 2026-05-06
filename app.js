@@ -11,80 +11,39 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db   = firebase.firestore();
-
-// Firebase persists auth sessions in localStorage by default —
-// so the user stays signed in across browser restarts automatically.
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+const db = firebase.firestore();
 
 // ─── DOM refs ──────────────────────────────────────────────────────
 const chatDiv      = document.getElementById("chat");
 const messageInput = document.getElementById("messageInput");
 const sendBtn      = document.getElementById("sendBtn");
-const loadingBar   = document.getElementById("loading-bar");
 const nameBar      = document.getElementById("name-bar");
 const userLabel    = document.getElementById("user-label");
 const userLabelTxt = document.getElementById("user-label-text");
 
 // ─── State ─────────────────────────────────────────────────────────
-let currentUser = null; // display name string
-let currentUID  = null; // Firebase UID
-let unsubMessages = null; // snapshot listener cleanup
+let currentUser = localStorage.getItem("circle_username") || null;
+const renderedIds = new Set();
 
-// ─── Auth: sign in anonymously and restore session ─────────────────
-auth.onAuthStateChanged(async firebaseUser => {
-  if (firebaseUser) {
-    // Already signed in (returning visitor or just signed in)
-    currentUID = firebaseUser.uid;
-    await restoreOrPromptName(firebaseUser.uid);
+// ─── On load: restore username if saved ───────────────────────────
+window.addEventListener("DOMContentLoaded", () => {
+  if (currentUser) {
+    activateUser(currentUser);
   } else {
-    // First ever visit — sign in anonymously
-    try {
-      const result = await auth.signInAnonymously();
-      currentUID = result.user.uid;
-      await restoreOrPromptName(result.user.uid);
-    } catch (err) {
-      console.error("Auth failed:", err);
-      showError("Could not sign you in. Please refresh.");
-    }
+    nameBar.classList.remove("hidden");
+    document.getElementById("username").focus();
   }
 });
 
-// ─── Restore saved name or ask for one ────────────────────────────
-async function restoreOrPromptName(uid) {
-  loadingBar.classList.add("hidden");
-
-  try {
-    const doc = await db.collection("users").doc(uid).get();
-    if (doc.exists && doc.data().name) {
-      // Returning user — restore their name silently
-      activateUser(doc.data().name);
-    } else {
-      // New user — show name input
-      nameBar.classList.remove("hidden");
-      document.getElementById("username").focus();
-    }
-  } catch (err) {
-    console.error("Could not fetch user profile:", err);
-    nameBar.classList.remove("hidden");
-  }
-}
-
-// ─── Set username (new users) ──────────────────────────────────────
-async function setUsername() {
+// ─── Set username ──────────────────────────────────────────────────
+function setUsername() {
   const input = document.getElementById("username");
   const name  = input.value.trim();
-  if (!name || !currentUID) return;
+  if (!name) return;
 
-  // Save name to Firestore under their UID
-  try {
-    await db.collection("users").doc(currentUID).set({ name }, { merge: true });
-    activateUser(name);
-  } catch (err) {
-    showError("Could not save your name. Check Firestore rules.");
-    console.error(err);
-  }
+  localStorage.setItem("circle_username", name);
+  currentUser = name;
+  activateUser(name);
 }
 
 document.getElementById("username").addEventListener("keydown", e => {
@@ -92,32 +51,24 @@ document.getElementById("username").addEventListener("keydown", e => {
 });
 
 // ─── Change name ───────────────────────────────────────────────────
-async function changeName() {
+function changeName() {
   const newName = prompt("Enter a new display name:", currentUser || "");
-  if (!newName || !newName.trim() || !currentUID) return;
-
-  try {
-    await db.collection("users").doc(currentUID).set({ name: newName.trim() }, { merge: true });
-    activateUser(newName.trim());
-  } catch (err) {
-    showError("Could not update your name.");
-    console.error(err);
-  }
+  if (!newName || !newName.trim()) return;
+  localStorage.setItem("circle_username", newName.trim());
+  currentUser = newName.trim();
+  userLabelTxt.textContent = "Chatting as " + currentUser;
 }
 
-// ─── Activate the chat UI once user is identified ─────────────────
+// ─── Activate chat UI ──────────────────────────────────────────────
 function activateUser(name) {
   currentUser = name;
-
   nameBar.classList.add("hidden");
   userLabel.classList.remove("hidden");
   userLabelTxt.textContent = "Chatting as " + name;
 
   messageInput.disabled = false;
   sendBtn.disabled = false;
-  messageInput.focus();
 
-  // Start listening for messages now that we know who we are
   startMessageListener();
 }
 
@@ -129,10 +80,9 @@ function sendMessage() {
   db.collection("messages").add({
     text,
     user: currentUser,
-    uid: currentUID,
     timestamp: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(err => {
-    showError("Failed to send message. Check Firestore rules.");
+    showError("Failed to send. Check Firestore rules.");
     console.error(err);
   });
 
@@ -144,12 +94,8 @@ messageInput.addEventListener("keydown", e => {
 });
 
 // ─── Real-time Message Listener ────────────────────────────────────
-const renderedIds = new Set();
-
 function startMessageListener() {
-  if (unsubMessages) unsubMessages(); // clean up any old listener
-
-  unsubMessages = db.collection("messages")
+  db.collection("messages")
     .orderBy("timestamp")
     .onSnapshot({ includeMetadataChanges: true }, snapshot => {
       const welcome = chatDiv.querySelector(".welcome-msg");
@@ -187,10 +133,7 @@ function startMessageListener() {
 
 // ─── Render a Message Bubble ───────────────────────────────────────
 function renderMessage(data, id, time) {
-  // Match on UID if available, fallback to name
-  const isMine = currentUID
-    ? data.uid === currentUID
-    : data.user === currentUser;
+  const isMine = data.user === currentUser;
 
   const wrapper = document.createElement("div");
   wrapper.classList.add("msg-wrapper", isMine ? "mine" : "theirs");
@@ -220,7 +163,6 @@ async function clearChat() {
     snapshot.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
 
-    // Clear UI
     chatDiv.innerHTML = '<div class="welcome-msg">👋 Say something to people nearby...</div>';
     renderedIds.clear();
   } catch (err) {
