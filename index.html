@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>NearbyChat</title>
+  <title>Circle</title>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,44 +11,101 @@
 <body>
 
   <div class="app">
-    <header>
-      <div class="header-inner">
-        <span class="logo">◎ NearbyChat</span>
-        <div class="status-dot"></div>
+
+    <!-- ── Sidebar ── -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <span class="logo">◎ Circle</span>
+        <button class="icon-btn" onclick="toggleSidebar()" title="Close">✕</button>
       </div>
 
-      <!-- New users: enter name -->
-      <div id="name-bar" class="hidden">
-        <input id="username" placeholder="Enter your name to join..." maxlength="24" autocomplete="off" />
-        <button id="joinBtn" onclick="setUsername()">Join</button>
-      </div>
-
-      <!-- Returning users: name + actions -->
-      <div id="user-label" class="user-label hidden">
-        <span id="user-label-text"></span>
-        <div class="header-actions">
-          <button id="changeNameBtn" onclick="changeName()">Rename</button>
-          <button id="clearBtn" onclick="clearChat()">🗑 Clear</button>
+      <div class="sidebar-user">
+        <div class="avatar" id="sidebar-avatar"></div>
+        <div>
+          <div id="sidebar-username" class="sb-name"></div>
+          <div class="sb-sub">Online</div>
         </div>
       </div>
-    </header>
 
-    <div id="chat" class="chat-area">
-      <div class="welcome-msg">👋 Say something to people nearby...</div>
-    </div>
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" id="nav-global" onclick="openGlobalChat()">
+          🌐 <span>Global Chat</span>
+        </button>
+        <button class="nav-btn" id="nav-rooms" onclick="showRoomsPanel()">
+          💬 <span>Private Rooms</span>
+        </button>
+      </nav>
 
-    <div class="input-area">
-      <input id="messageInput" placeholder="Type a message..." autocomplete="off" disabled />
-      <button id="sendBtn" onclick="sendMessage()" disabled>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13"/>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-        </svg>
-      </button>
-    </div>
-  </div>
+      <div class="sidebar-bottom">
+        <button class="nav-btn danger" onclick="changeUsername()">✏️ Change Name</button>
+      </div>
+    </aside>
 
-  <!-- Firebase (no auth SDK needed) -->
+    <!-- ── Sidebar overlay ── -->
+    <div id="sidebar-overlay" class="hidden" onclick="toggleSidebar()"></div>
+
+    <!-- ── Main panel ── -->
+    <div class="main">
+
+      <!-- Header -->
+      <header>
+        <div class="header-left">
+          <button class="icon-btn" id="menuBtn" onclick="toggleSidebar()">☰</button>
+          <div>
+            <div id="chat-title" class="chat-title">Global Chat</div>
+            <div id="chat-subtitle" class="chat-subtitle"></div>
+          </div>
+        </div>
+        <div class="header-right">
+          <button id="clearBtn" class="icon-btn hidden" onclick="clearChat()" title="Delete my messages">🗑</button>
+        </div>
+      </header>
+
+      <!-- Name entry screen (shown before username is set) -->
+      <div id="name-screen" class="name-screen">
+        <div class="name-card">
+          <div class="name-logo">◎ Circle</div>
+          <p class="name-tagline">Chat with people nearby</p>
+          <input id="username-input" type="text" placeholder="Choose a username..." maxlength="24" autocomplete="off" />
+          <button class="primary-btn" onclick="setUsername()">Join Chat</button>
+          <div id="name-error" class="form-error hidden"></div>
+        </div>
+      </div>
+
+      <!-- Rooms panel -->
+      <div id="rooms-panel" class="rooms-panel hidden">
+        <div class="rooms-inner">
+          <h3>Private Rooms</h3>
+          <p class="rooms-hint">Start a private conversation with any user by their username.</p>
+          <div class="new-room-row">
+            <input id="room-username-input" placeholder="Enter username..." maxlength="24" autocomplete="off" />
+            <button class="primary-btn sm" onclick="openPrivateRoom()">Open Chat</button>
+          </div>
+          <div id="room-error" class="form-error hidden"></div>
+          <div id="rooms-list"></div>
+        </div>
+      </div>
+
+      <!-- Chat area -->
+      <div id="chat" class="chat-area">
+        <div class="welcome-msg">👋 Say something to people nearby...</div>
+      </div>
+
+      <!-- Input bar -->
+      <div class="input-area" id="input-area">
+        <input id="messageInput" placeholder="Type a message..." autocomplete="off" disabled />
+        <button id="sendBtn" onclick="sendMessage()" disabled>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /app -->
+
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>

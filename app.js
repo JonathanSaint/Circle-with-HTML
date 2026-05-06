@@ -12,149 +12,67 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // ─── State ─────────────────────────────────────────────────────────
-let currentUser     = null;  // { uid, username }
-let activeRoom      = null;  // 'global' | 'private:<roomId>'
-let unsubMessages   = null;
-let visitedRooms    = JSON.parse(localStorage.getItem("circle_rooms") || "[]");
-const renderedIds   = new Set();
+let currentUser   = null;  // string username
+let activeRoom    = null;  // 'global' | 'private:<roomId>'
+let unsubMessages = null;
+let visitedRooms  = JSON.parse(localStorage.getItem("circle_rooms") || "[]");
+const renderedIds = new Set();
 
 // ─── DOM helpers ───────────────────────────────────────────────────
-const $  = id => document.getElementById(id);
+const $    = id => document.getElementById(id);
 const show = id => $(id).classList.remove("hidden");
 const hide = id => $(id).classList.add("hidden");
 
 // ─── Boot ──────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
-  const saved = localStorage.getItem("circle_session");
+  const saved = localStorage.getItem("circle_username");
   if (saved) {
-    try {
-      currentUser = JSON.parse(saved);
-      bootApp();
-      return;
-    } catch(e) { localStorage.removeItem("circle_session"); }
+    activateUser(saved);
   }
-  show("auth-screen");
+  // name-screen is visible by default (no hidden class in HTML)
 });
 
-// ─── AUTH TABS ─────────────────────────────────────────────────────
-function switchTab(tab) {
-  document.querySelectorAll(".tab-btn").forEach((b, i) =>
-    b.classList.toggle("active", (i === 0) === (tab === "login"))
-  );
-  tab === "login" ? (show("login-form"), hide("register-form"))
-                  : (hide("login-form"), show("register-form"));
+// ─── SET USERNAME ──────────────────────────────────────────────────
+function setUsername() {
+  const input = $("username-input");
+  const name  = input.value.trim();
+  const errEl = $("name-error");
+  hide("name-error");
+
+  if (!name || name.length < 2)
+    return showFormError(errEl, "Username must be at least 2 characters.");
+  if (!/^[a-zA-Z0-9_ ]+$/.test(name))
+    return showFormError(errEl, "Only letters, numbers, spaces and underscores allowed.");
+
+  localStorage.setItem("circle_username", name);
+  activateUser(name);
 }
 
-// ─── REGISTER ──────────────────────────────────────────────────────
-async function registerUser() {
-  const username  = $("reg-username").value.trim().toLowerCase();
-  const password  = $("reg-password").value;
-  const password2 = $("reg-password2").value;
-  const errEl     = $("reg-error");
+$("username-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") setUsername();
+});
 
-  hide("reg-error");
-
-  if (!username || username.length < 3)
-    return showFormError(errEl, "Username must be at least 3 characters.");
-  if (!/^[a-z0-9_]+$/.test(username))
-    return showFormError(errEl, "Username can only contain letters, numbers, underscores.");
-  if (!password || password.length < 6)
-    return showFormError(errEl, "Password must be at least 6 characters.");
-  if (password !== password2)
-    return showFormError(errEl, "Passwords don't match.");
-
-  try {
-    // Check username taken
-    const existing = await db.collection("users").doc(username).get();
-    if (existing.exists) return showFormError(errEl, "Username already taken.");
-
-    // Hash password (simple SHA-256 via Web Crypto)
-    const hash = await hashPassword(password);
-    const uid  = "u_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-    await db.collection("users").doc(username).set({
-      uid, username, passwordHash: hash, createdAt: Date.now()
-    });
-
-    currentUser = { uid, username };
-    localStorage.setItem("circle_session", JSON.stringify(currentUser));
-    bootApp();
-  } catch(err) {
-    showFormError(errEl, "Could not create account. Check Firestore rules.");
-    console.error(err);
-  }
+// ─── CHANGE USERNAME ───────────────────────────────────────────────
+function changeUsername() {
+  const newName = prompt("Enter a new display name:", currentUser || "");
+  if (!newName || !newName.trim()) return;
+  const name = newName.trim();
+  localStorage.setItem("circle_username", name);
+  currentUser = name;
+  $("sidebar-username").textContent = name;
+  $("sidebar-avatar").textContent   = name[0].toUpperCase();
+  closeSidebarOnMobile();
 }
 
-// ─── SIGN IN ───────────────────────────────────────────────────────
-async function signIn() {
-  const username = $("login-username").value.trim().toLowerCase();
-  const password = $("login-password").value;
-  const errEl    = $("login-error");
-
-  hide("login-error");
-
-  if (!username || !password)
-    return showFormError(errEl, "Please enter username and password.");
-
-  try {
-    const doc = await db.collection("users").doc(username).get();
-    if (!doc.exists) return showFormError(errEl, "Account not found.");
-
-    const data = doc.data();
-    const hash = await hashPassword(password);
-
-    if (hash !== data.passwordHash)
-      return showFormError(errEl, "Incorrect password.");
-
-    currentUser = { uid: data.uid, username: data.username };
-    localStorage.setItem("circle_session", JSON.stringify(currentUser));
-    bootApp();
-  } catch(err) {
-    showFormError(errEl, "Sign in failed. Try again.");
-    console.error(err);
-  }
-}
-
-// ─── SIGN OUT ──────────────────────────────────────────────────────
-function signOutUser() {
-  if (!confirm("Sign out?")) return;
-  localStorage.removeItem("circle_session");
-  currentUser = null;
-  activeRoom  = null;
-  if (unsubMessages) { unsubMessages(); unsubMessages = null; }
-  renderedIds.clear();
-  hide("app-screen");
-  $("login-username").value = "";
-  $("login-password").value = "";
-  show("auth-screen");
-}
-
-// ─── DELETE ACCOUNT ────────────────────────────────────────────────
-async function deleteAccount() {
-  if (!confirm("Delete your account permanently? This cannot be undone.")) return;
-  try {
-    await db.collection("users").doc(currentUser.username).delete();
-    localStorage.removeItem("circle_session");
-    localStorage.removeItem("circle_rooms");
-    currentUser = null;
-    if (unsubMessages) { unsubMessages(); unsubMessages = null; }
-    renderedIds.clear();
-    hide("app-screen");
-    show("auth-screen");
-  } catch(err) {
-    alert("Could not delete account. Check Firestore rules.");
-    console.error(err);
-  }
-}
-
-// ─── BOOT APP ──────────────────────────────────────────────────────
-function bootApp() {
-  hide("auth-screen");
-  show("app-screen");
-
-  $("sidebar-username").textContent = currentUser.username;
-  $("sidebar-avatar").textContent   = currentUser.username[0].toUpperCase();
-
+// ─── ACTIVATE USER ─────────────────────────────────────────────────
+function activateUser(name) {
+  currentUser = name;
+  hide("name-screen");
+  $("sidebar-username").textContent = name;
+  $("sidebar-avatar").textContent   = name[0].toUpperCase();
+  $("messageInput").disabled = false;
+  $("sendBtn").disabled      = false;
+  show("clearBtn");
   renderRoomsList();
   openGlobalChat();
 }
@@ -163,6 +81,13 @@ function bootApp() {
 function toggleSidebar() {
   $("sidebar").classList.toggle("open");
   $("sidebar-overlay").classList.toggle("hidden");
+}
+
+function closeSidebarOnMobile() {
+  if (window.innerWidth < 700) {
+    $("sidebar").classList.remove("open");
+    $("sidebar-overlay").classList.add("hidden");
+  }
 }
 
 // ─── GLOBAL CHAT ───────────────────────────────────────────────────
@@ -180,7 +105,7 @@ function openGlobalChat() {
   startMessageListener("messages");
 }
 
-// ─── ROOMS PANEL ───────────────────────────────────────────────────
+// ─── PRIVATE ROOMS ─────────────────────────────────────────────────
 function showRoomsPanel() {
   $("nav-rooms").classList.add("active");
   $("nav-global").classList.remove("active");
@@ -193,29 +118,20 @@ function showRoomsPanel() {
   renderRoomsList();
 }
 
-async function openPrivateRoom() {
-  const target = $("room-username-input").value.trim().toLowerCase();
+function openPrivateRoom() {
+  const target = $("room-username-input").value.trim();
   const errEl  = $("room-error");
   hide("room-error");
 
   if (!target) return;
-  if (target === currentUser.username)
+  if (target.toLowerCase() === currentUser.toLowerCase())
     return showFormError(errEl, "You can't chat with yourself.");
-
-  // Verify user exists
-  try {
-    const doc = await db.collection("users").doc(target).get();
-    if (!doc.exists) return showFormError(errEl, `User "${target}" not found.`);
-  } catch(err) {
-    return showFormError(errEl, "Could not verify user. Try again.");
-  }
 
   $("room-username-input").value = "";
 
-  // Room ID is deterministic: sorted pair joined by '_'
-  const roomId = [currentUser.username, target].sort().join("_");
+  // Room ID: sorted pair so it's the same from both sides
+  const roomId = [currentUser.toLowerCase(), target.toLowerCase()].sort().join("_");
 
-  // Save to visited rooms
   if (!visitedRooms.find(r => r.id === roomId)) {
     visitedRooms.push({ id: roomId, with: target });
     localStorage.setItem("circle_rooms", JSON.stringify(visitedRooms));
@@ -251,7 +167,7 @@ function renderRoomsList() {
     btn.innerHTML = `
       <div class="room-avatar">${room.with[0].toUpperCase()}</div>
       <div class="room-info">
-        <div class="room-name">${room.with}</div>
+        <div class="room-name">${escapeHtml(room.with)}</div>
         <div class="room-sub">Private · Tap to open</div>
       </div>
     `;
@@ -265,14 +181,13 @@ function sendMessage() {
   const text = $("messageInput").value.trim();
   if (!text || !currentUser || !activeRoom) return;
 
-  const collection = activeRoom === "global"
+  const collectionPath = activeRoom === "global"
     ? "messages"
     : "privateRooms/" + activeRoom.replace("private:", "") + "/messages";
 
-  db.collection(collection).add({
+  db.collection(collectionPath).add({
     text,
-    user: currentUser.username,
-    uid:  currentUser.uid,
+    user: currentUser,
     timestamp: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(err => {
     showChatError("Failed to send. Check Firestore rules.");
@@ -326,7 +241,7 @@ function startMessageListener(collectionPath) {
 
 // ─── RENDER BUBBLE ─────────────────────────────────────────────────
 function renderMessage(data, id, time) {
-  const isMine = data.uid === currentUser.uid || data.user === currentUser.username;
+  const isMine = data.user === currentUser;
 
   const wrapper = document.createElement("div");
   wrapper.classList.add("msg-wrapper", isMine ? "mine" : "theirs");
@@ -344,7 +259,7 @@ function renderMessage(data, id, time) {
   $("chat").appendChild(wrapper);
 }
 
-// ─── CLEAR CHAT ────────────────────────────────────────────────────
+// ─── CLEAR MY MESSAGES ─────────────────────────────────────────────
 async function clearChat() {
   if (!confirm("Delete all your messages in this chat?")) return;
 
@@ -353,9 +268,8 @@ async function clearChat() {
     : "privateRooms/" + activeRoom.replace("private:", "") + "/messages";
 
   try {
-    // Only fetch messages belonging to the signed-in user
     const snapshot = await db.collection(collectionPath)
-      .where("user", "==", currentUser.username)
+      .where("user", "==", currentUser)
       .get();
 
     if (snapshot.empty) {
@@ -367,7 +281,6 @@ async function clearChat() {
     snapshot.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
 
-    // Remove only the deleted user's bubbles from the UI
     snapshot.forEach(doc => {
       const el = $("chat").querySelector(`[data-id="${doc.id}"]`);
       if (el) el.remove();
@@ -387,13 +300,6 @@ function resetChat() {
   $("chat").innerHTML = '<div class="welcome-msg">👋 Say something...</div>';
 }
 
-function closeSidebarOnMobile() {
-  if (window.innerWidth < 700) {
-    $("sidebar").classList.remove("open");
-    $("sidebar-overlay").classList.add("hidden");
-  }
-}
-
 function showFormError(el, msg) {
   el.textContent = msg;
   el.classList.remove("hidden");
@@ -408,10 +314,4 @@ function showChatError(msg) {
 
 function escapeHtml(str) {
   return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-async function hashPassword(password) {
-  const enc  = new TextEncoder().encode(password);
-  const buf  = await crypto.subtle.digest("SHA-256", enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
 }

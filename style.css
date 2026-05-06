@@ -321,3 +321,77 @@ input:disabled { opacity: 0.4; cursor: not-allowed; }
     max-width: 100%;
   }
 }
+
+/* ─── Name Entry Screen ────────────────────────────────── */
+.name-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.name-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  text-align: center;
+}
+
+.name-logo {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+
+.name-tagline {
+  color: var(--muted);
+  font-size: 14px;
+  margin-top: -6px;
+}
+
+.name-card input {
+  width: 100%;
+  text-align: center;
+  font-size: 16px;
+}
+
+.primary-btn {
+  width: 100%;
+  padding: 12px;
+  background: var(--accent);
+  color: #0a0f1e;
+  border: none;
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  min-height: 46px;
+  transition: background 0.2s;
+}
+.primary-btn:active { background: #7dd3fc; }
+@media (hover: hover) { .primary-btn:hover { background: #7dd3fc; } }
+
+.primary-btn.sm {
+  width: auto;
+  padding: 9px 16px;
+  font-size: 13px;
+  min-height: 40px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.form-error {
+  color: #f87171;
+  font-size: 12px;
+  text-align: center;
+  width: 100%;
+}
