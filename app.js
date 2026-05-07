@@ -12,11 +12,16 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // ─── State ─────────────────────────────────────────────────────────
-let currentUser   = null;  // string username
-let activeRoom    = null;  // 'global' | 'private:<roomId>'
+let currentUser   = null;
+let activeRoom    = null;
 let unsubMessages = null;
 let visitedRooms  = JSON.parse(localStorage.getItem("circle_rooms") || "[]");
 const renderedIds = new Set();
+
+// unread counts: { global: N, 'roomId': N, ... }
+let unreadCounts  = {};
+// background listeners for unread tracking (one per room)
+const unsubUnread = {};
 
 // ─── DOM helpers ───────────────────────────────────────────────────
 const $    = id => document.getElementById(id);
@@ -26,10 +31,7 @@ const hide = id => $(id).classList.add("hidden");
 // ─── Boot ──────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   const saved = localStorage.getItem("circle_username");
-  if (saved) {
-    activateUser(saved);
-  }
-  // name-screen is visible by default (no hidden class in HTML)
+  if (saved) activateUser(saved);
 });
 
 // ─── SET USERNAME ──────────────────────────────────────────────────
@@ -74,6 +76,8 @@ function activateUser(name) {
   $("sendBtn").disabled      = false;
   show("clearBtn");
   renderRoomsList();
+  startUnreadListener("global", "messages");
+  visitedRooms.forEach(r => startUnreadListener(r.id, "privateRooms/" + r.id + "/messages"));
   openGlobalChat();
 }
 
@@ -102,6 +106,7 @@ function openGlobalChat() {
   show("input-area");
   closeSidebarOnMobile();
   resetChat();
+  markRead("global");
   startMessageListener("messages");
 }
 
@@ -129,12 +134,12 @@ function openPrivateRoom() {
 
   $("room-username-input").value = "";
 
-  // Room ID: sorted pair so it's the same from both sides
   const roomId = [currentUser.toLowerCase(), target.toLowerCase()].sort().join("_");
 
   if (!visitedRooms.find(r => r.id === roomId)) {
     visitedRooms.push({ id: roomId, with: target });
     localStorage.setItem("circle_rooms", JSON.stringify(visitedRooms));
+    startUnreadListener(roomId, "privateRooms/" + roomId + "/messages");
   }
 
   enterPrivateRoom(roomId, target);
@@ -151,6 +156,7 @@ function enterPrivateRoom(roomId, withUser) {
   show("input-area");
   closeSidebarOnMobile();
   resetChat();
+  markRead(roomId);
   startMessageListener("privateRooms/" + roomId + "/messages");
 }
 
@@ -162,17 +168,97 @@ function renderRoomsList() {
     return;
   }
   visitedRooms.forEach(room => {
+    const count = unreadCounts[room.id] || 0;
     const btn = document.createElement("button");
     btn.className = "room-item";
+    btn.id = "room-item-" + room.id;
     btn.innerHTML = `
-      <div class="room-avatar">${room.with[0].toUpperCase()}</div>
+      <div class="room-avatar">${escapeHtml(room.with[0].toUpperCase())}</div>
       <div class="room-info">
         <div class="room-name">${escapeHtml(room.with)}</div>
         <div class="room-sub">Private · Tap to open</div>
       </div>
+      ${count > 0 ? `<div class="badge">${count > 99 ? "99+" : count}</div>` : '<div class="badge hidden">0</div>'}
     `;
     btn.onclick = () => enterPrivateRoom(room.id, room.with);
     list.appendChild(btn);
+  });
+}
+
+// ─── UNREAD TRACKING ───────────────────────────────────────────────
+
+// We track the latest timestamp we've "seen" per room in localStorage
+function getSeenTimestamp(roomKey) {
+  return parseInt(localStorage.getItem("seen_" + roomKey) || "0", 10);
+}
+
+function setSeenTimestamp(roomKey, ts) {
+  localStorage.setItem("seen_" + roomKey, String(ts));
+}
+
+function markRead(roomKey) {
+  setSeenTimestamp(roomKey, Date.now());
+  unreadCounts[roomKey] = 0;
+  updateBadges();
+}
+
+function startUnreadListener(roomKey, collectionPath) {
+  // Don't double-subscribe
+  if (unsubUnread[roomKey]) return;
+
+  const seenAt = getSeenTimestamp(roomKey);
+
+  unsubUnread[roomKey] = db.collection(collectionPath)
+    .orderBy("timestamp")
+    .onSnapshot(snapshot => {
+      if (activeRoom === (roomKey === "global" ? "global" : "private:" + roomKey)) {
+        // Room is open — mark all read
+        markRead(roomKey);
+        return;
+      }
+
+      let count = 0;
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (!data.timestamp) return;
+        const msgTs = data.timestamp.toMillis();
+        if (msgTs > getSeenTimestamp(roomKey) && data.user !== currentUser) count++;
+      });
+
+      unreadCounts[roomKey] = count;
+      updateBadges();
+    }, err => console.error("Unread listener error:", err));
+}
+
+function updateBadges() {
+  // Global nav badge
+  const globalCount = unreadCounts["global"] || 0;
+  let globalBadge = $("badge-global");
+  if (globalBadge) {
+    globalBadge.textContent = globalCount > 99 ? "99+" : globalCount;
+    globalBadge.classList.toggle("hidden", globalCount === 0);
+  }
+
+  // Private rooms nav badge (sum of all private unreads)
+  const privateTotal = Object.entries(unreadCounts)
+    .filter(([k]) => k !== "global")
+    .reduce((sum, [, v]) => sum + v, 0);
+
+  let privateBadge = $("badge-rooms");
+  if (privateBadge) {
+    privateBadge.textContent = privateTotal > 99 ? "99+" : privateTotal;
+    privateBadge.classList.toggle("hidden", privateTotal === 0);
+  }
+
+  // Per-room badges inside the rooms list
+  visitedRooms.forEach(room => {
+    const item = $("room-item-" + room.id);
+    if (!item) return;
+    const badge = item.querySelector(".badge");
+    if (!badge) return;
+    const count = unreadCounts[room.id] || 0;
+    badge.textContent = count > 99 ? "99+" : count;
+    badge.classList.toggle("hidden", count === 0);
   });
 }
 
@@ -306,10 +392,13 @@ function showFormError(el, msg) {
 }
 
 function showChatError(msg) {
-  const err = document.createElement("div");
-  err.className = "error-banner";
-  err.textContent = msg;
-  $("chat").prepend(err);
+  const wrap = document.createElement("div");
+  wrap.className = "error-banner";
+  wrap.innerHTML = `
+    <span>${escapeHtml(msg)}</span>
+    <button class="error-close" onclick="this.parentElement.remove()" title="Dismiss">✕</button>
+  `;
+  $("chat").prepend(wrap);
 }
 
 function escapeHtml(str) {

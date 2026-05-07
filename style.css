@@ -592,3 +592,77 @@ input:disabled    { opacity: 0.35; cursor: not-allowed; }
 
   .bubble { max-width: 85%; }
 }
+
+/* ══════════════════════════════════════════════════
+   UNREAD BADGE
+══════════════════════════════════════════════════ */
+.badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #0d1117;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  flex-shrink: 0;
+  animation: badgePop 0.2s ease;
+}
+
+@keyframes badgePop {
+  from { transform: scale(0.5); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+/* badge inside room-item sits at the right edge */
+.room-item .badge {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.room-item { position: relative; }
+
+/* ══════════════════════════════════════════════════
+   CLOSEABLE ERROR BANNER
+══════════════════════════════════════════════════ */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(248,81,73,0.1);
+  border: 0.5px solid rgba(248,81,73,0.35);
+  color: #ff7b72;
+  font-size: 12px;
+  padding: 9px 10px 9px 14px;
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  line-height: 1.5;
+  animation: slideDown 0.18s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.error-close {
+  background: transparent;
+  border: none;
+  color: #ff7b72;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+}
+.error-close:hover { opacity: 1; background: rgba(248,81,73,0.15); }
