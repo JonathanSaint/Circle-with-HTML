@@ -666,3 +666,138 @@ input:disabled    { opacity: 0.35; cursor: not-allowed; }
   transition: opacity 0.15s, background 0.15s;
 }
 .error-close:hover { opacity: 1; background: rgba(248,81,73,0.15); }
+
+/* ══════════════════════════════════════════════════
+   APP-HIDDEN (hides sidebar + main while on auth)
+══════════════════════════════════════════════════ */
+.app-hidden { display: none !important; }
+
+/* ══════════════════════════════════════════════════
+   AUTH SCREEN
+══════════════════════════════════════════════════ */
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  padding-top: calc(24px + env(safe-area-inset-top));
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.auth-logo {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.auth-tagline {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+/* ─── Tabs ─────────────────────────────────────── */
+.auth-tabs {
+  display: flex;
+  background: var(--surface2);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  margin-bottom: 20px;
+  gap: 3px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+
+.auth-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* ─── Form ─────────────────────────────────────── */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.field-wrap input {
+  width: 100%;
+  padding-right: 38px; /* space for status/eye button */
+}
+
+.toggle-pw {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+.toggle-pw:hover { color: var(--text); }
+
+/* Real-time username status badge */
+.field-status {
+  position: absolute;
+  right: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.field-status.ok       { color: var(--green); }
+.field-status.error    { color: var(--red); }
+.field-status.checking { color: var(--text-muted); }
+
+/* field-level error text */
+.field-error {
+  font-size: 12px;
+  color: var(--red);
+  padding: 0 2px;
+  animation: slideDown 0.15s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Primary button already defined above — just ensure full-width in auth */
+.auth-form .primary-btn { margin-top: 4px; }

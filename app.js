@@ -12,72 +12,266 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // ─── State ─────────────────────────────────────────────────────────
-let currentUser   = null;
+let currentUser   = null; // { username, uid }
 let activeRoom    = null;
 let unsubMessages = null;
-let visitedRooms  = JSON.parse(localStorage.getItem("circle_rooms") || "[]");
+let visitedRooms  = [];
 const renderedIds = new Set();
-
-// unread counts: { global: N, 'roomId': N, ... }
-let unreadCounts  = {};
-// background listeners for unread tracking (one per room)
 const unsubUnread = {};
+let unreadCounts  = {};
+
+// debounce timer for real-time username check
+let usernameCheckTimer = null;
 
 // ─── DOM helpers ───────────────────────────────────────────────────
 const $    = id => document.getElementById(id);
 const show = id => $(id).classList.remove("hidden");
 const hide = id => $(id).classList.add("hidden");
 
-// ─── Boot ──────────────────────────────────────────────────────────
-window.addEventListener("DOMContentLoaded", () => {
-  const saved = localStorage.getItem("circle_username");
-  if (saved) activateUser(saved);
-});
-
-// ─── SET USERNAME ──────────────────────────────────────────────────
-function setUsername() {
-  const input = $("username-input");
-  const name  = input.value.trim();
-  const errEl = $("name-error");
-  hide("name-error");
-
-  if (!name || name.length < 2)
-    return showFormError(errEl, "Username must be at least 2 characters.");
-  if (!/^[a-zA-Z0-9_ ]+$/.test(name))
-    return showFormError(errEl, "Only letters, numbers, spaces and underscores allowed.");
-
-  localStorage.setItem("circle_username", name);
-  activateUser(name);
+function setError(id, msg) {
+  const el = $(id);
+  el.textContent = msg;
+  msg ? el.classList.remove("hidden") : el.classList.add("hidden");
 }
 
-$("username-input").addEventListener("keydown", e => {
-  if (e.key === "Enter") setUsername();
+// ─── BOOT ──────────────────────────────────────────────────────────
+window.addEventListener("DOMContentLoaded", () => {
+  const session = localStorage.getItem("nc_session");
+  if (session) {
+    try {
+      const user = JSON.parse(session);
+      currentUser = user;
+      bootApp();
+      return;
+    } catch(e) { localStorage.removeItem("nc_session"); }
+  }
+  showAuthScreen();
+
+  // Real-time username availability check on signup
+  $("su-username").addEventListener("input", () => {
+    clearTimeout(usernameCheckTimer);
+    const val = $("su-username").value.trim().toLowerCase();
+    const status = $("su-username-status");
+    setError("su-username-error", "");
+
+    if (!val) { status.textContent = ""; status.className = "field-status"; return; }
+    if (val.length < 2) {
+      status.textContent = "Too short";
+      status.className = "field-status error";
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(val)) {
+      status.textContent = "Letters, numbers, _ only";
+      status.className = "field-status error";
+      return;
+    }
+
+    status.textContent = "Checking…";
+    status.className = "field-status checking";
+
+    usernameCheckTimer = setTimeout(async () => {
+      try {
+        const doc = await db.collection("nc_users").doc(val).get();
+        if (doc.exists) {
+          status.textContent = "✗ Taken";
+          status.className = "field-status error";
+        } else {
+          status.textContent = "✓ Available";
+          status.className = "field-status ok";
+        }
+      } catch(e) {
+        status.textContent = "";
+        status.className = "field-status";
+      }
+    }, 400);
+  });
+
+  // Enter key support
+  ["si-username", "si-password"].forEach(id => {
+    $(id).addEventListener("keydown", e => { if (e.key === "Enter") signIn(); });
+  });
+  ["su-username", "su-password", "su-password2"].forEach(id => {
+    $(id).addEventListener("keydown", e => { if (e.key === "Enter") signUp(); });
+  });
 });
 
-// ─── CHANGE USERNAME ───────────────────────────────────────────────
-function changeUsername() {
-  const newName = prompt("Enter a new display name:", currentUser || "");
-  if (!newName || !newName.trim()) return;
-  const name = newName.trim();
-  localStorage.setItem("circle_username", name);
-  currentUser = name;
-  $("sidebar-username").textContent = name;
-  $("sidebar-avatar").textContent   = name[0].toUpperCase();
+// ─── AUTH SCREEN ───────────────────────────────────────────────────
+function showAuthScreen() {
+  $("auth-screen").classList.remove("hidden");
+  $("sidebar").classList.add("app-hidden");
+  $("sidebar-overlay").classList.add("hidden");
+  $("main-panel").classList.add("app-hidden");
+}
+
+function hideAuthScreen() {
+  $("auth-screen").classList.add("hidden");
+  $("sidebar").classList.remove("app-hidden");
+  $("main-panel").classList.remove("app-hidden");
+}
+
+function switchTab(tab) {
+  $("tab-signin").classList.toggle("active", tab === "signin");
+  $("tab-signup").classList.toggle("active", tab === "signup");
+  tab === "signin" ? (show("form-signin"), hide("form-signup"))
+                   : (hide("form-signin"), show("form-signup"));
+  setError("si-error", "");
+  setError("su-error", "");
+  setError("su-username-error", "");
+}
+
+function togglePw(inputId, btn) {
+  const input = $(inputId);
+  const isText = input.type === "text";
+  input.type = isText ? "password" : "text";
+  btn.textContent = isText ? "👁" : "🙈";
+}
+
+// ─── SIGN IN ───────────────────────────────────────────────────────
+async function signIn() {
+  const username = $("si-username").value.trim().toLowerCase();
+  const password = $("si-password").value;
+  setError("si-error", "");
+
+  if (!username) return setError("si-error", "Enter your username.");
+  if (!password) return setError("si-error", "Enter your password.");
+
+  const btn = $("si-btn");
+  btn.disabled = true;
+  btn.textContent = "Signing in…";
+
+  try {
+    const doc = await db.collection("nc_users").doc(username).get();
+    if (!doc.exists) {
+      setError("si-error", "No account found with that username.");
+      return;
+    }
+    const data = doc.data();
+    const hash = await sha256(password);
+    if (hash !== data.passwordHash) {
+      setError("si-error", "Incorrect password.");
+      return;
+    }
+    currentUser = { username: data.username, uid: data.uid };
+    localStorage.setItem("nc_session", JSON.stringify(currentUser));
+    bootApp();
+  } catch(err) {
+    setError("si-error", "Sign in failed. Check your connection.");
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Sign In";
+  }
+}
+
+// ─── SIGN UP ───────────────────────────────────────────────────────
+async function signUp() {
+  const username  = $("su-username").value.trim().toLowerCase();
+  const password  = $("su-password").value;
+  const password2 = $("su-password2").value;
+  const status    = $("su-username-status");
+  setError("su-error", "");
+
+  if (!username || username.length < 2)
+    return setError("su-error", "Username must be at least 2 characters.");
+  if (!/^[a-zA-Z0-9_]+$/.test(username))
+    return setError("su-error", "Username: letters, numbers, underscores only.");
+  if (!password)
+    return setError("su-error", "Enter a password.");
+  if (password !== password2)
+    return setError("su-error", "Passwords don't match.");
+  if (status.classList.contains("error"))
+    return setError("su-error", "Choose a different username.");
+
+  const btn = $("su-btn");
+  btn.disabled = true;
+  btn.textContent = "Creating account…";
+
+  try {
+    // Double-check username not taken (in case user bypassed debounce)
+    const existing = await db.collection("nc_users").doc(username).get();
+    if (existing.exists) {
+      setError("su-error", "That username is already taken.");
+      status.textContent = "✗ Taken";
+      status.className = "field-status error";
+      return;
+    }
+
+    const uid  = "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const hash = await sha256(password);
+
+    await db.collection("nc_users").doc(username).set({
+      username,
+      uid,
+      passwordHash: hash,
+      createdAt: Date.now()
+    });
+
+    currentUser = { username, uid };
+    localStorage.setItem("nc_session", JSON.stringify(currentUser));
+    bootApp();
+  } catch(err) {
+    setError("su-error", "Could not create account. Check Firestore rules.");
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Create Account";
+  }
+}
+
+// ─── SIGN OUT ──────────────────────────────────────────────────────
+function signOut() {
+  if (!confirm("Sign out?")) return;
+  localStorage.removeItem("nc_session");
+  // clean up listeners
+  Object.values(unsubUnread).forEach(u => u && u());
+  if (unsubMessages) unsubMessages();
+  currentUser = null; activeRoom = null;
+  renderedIds.clear(); unreadCounts = {};
+  visitedRooms = [];
+  // reset UI
+  $("si-username").value = "";
+  $("si-password").value = "";
+  switchTab("signin");
+  showAuthScreen();
   closeSidebarOnMobile();
 }
 
-// ─── ACTIVATE USER ─────────────────────────────────────────────────
-function activateUser(name) {
-  currentUser = name;
-  hide("name-screen");
-  $("sidebar-username").textContent = name;
-  $("sidebar-avatar").textContent   = name[0].toUpperCase();
+// ─── DELETE ACCOUNT ────────────────────────────────────────────────
+async function deleteAccount() {
+  if (!confirm("Permanently delete your account? This cannot be undone.")) return;
+  try {
+    await db.collection("nc_users").doc(currentUser.username).delete();
+    localStorage.removeItem("nc_session");
+    localStorage.removeItem("nc_rooms_" + currentUser.username);
+    Object.values(unsubUnread).forEach(u => u && u());
+    if (unsubMessages) unsubMessages();
+    currentUser = null; activeRoom = null;
+    renderedIds.clear(); unreadCounts = {};
+    visitedRooms = [];
+    switchTab("signin");
+    showAuthScreen();
+  } catch(err) {
+    alert("Could not delete account. Check Firestore rules.");
+    console.error(err);
+  }
+}
+
+// ─── BOOT APP ──────────────────────────────────────────────────────
+function bootApp() {
+  visitedRooms = JSON.parse(
+    localStorage.getItem("nc_rooms_" + currentUser.username) || "[]"
+  );
+  hideAuthScreen();
+  $("sidebar-username").textContent = currentUser.username;
+  $("sidebar-avatar").textContent   = currentUser.username[0].toUpperCase();
   $("messageInput").disabled = false;
   $("sendBtn").disabled      = false;
   show("clearBtn");
   renderRoomsList();
   startUnreadListener("global", "messages");
-  visitedRooms.forEach(r => startUnreadListener(r.id, "privateRooms/" + r.id + "/messages"));
+  visitedRooms.forEach(r =>
+    startUnreadListener(r.id, "privateRooms/" + r.id + "/messages")
+  );
   openGlobalChat();
 }
 
@@ -123,22 +317,30 @@ function showRoomsPanel() {
   renderRoomsList();
 }
 
-function openPrivateRoom() {
-  const target = $("room-username-input").value.trim();
+async function openPrivateRoom() {
+  const target = $("room-username-input").value.trim().toLowerCase();
   const errEl  = $("room-error");
-  hide("room-error");
+  setError("room-error", "");
 
   if (!target) return;
-  if (target.toLowerCase() === currentUser.toLowerCase())
-    return showFormError(errEl, "You can't chat with yourself.");
+  if (target === currentUser.username)
+    return setError("room-error", "You can't chat with yourself.");
+
+  // Verify user exists in Firestore
+  try {
+    const doc = await db.collection("nc_users").doc(target).get();
+    if (!doc.exists)
+      return setError("room-error", `No user found with username "${target}".`);
+  } catch(e) {
+    return setError("room-error", "Could not verify user. Try again.");
+  }
 
   $("room-username-input").value = "";
-
-  const roomId = [currentUser.toLowerCase(), target.toLowerCase()].sort().join("_");
+  const roomId = [currentUser.username, target].sort().join("_");
 
   if (!visitedRooms.find(r => r.id === roomId)) {
     visitedRooms.push({ id: roomId, with: target });
-    localStorage.setItem("circle_rooms", JSON.stringify(visitedRooms));
+    localStorage.setItem("nc_rooms_" + currentUser.username, JSON.stringify(visitedRooms));
     startUnreadListener(roomId, "privateRooms/" + roomId + "/messages");
   }
 
@@ -178,7 +380,7 @@ function renderRoomsList() {
         <div class="room-name">${escapeHtml(room.with)}</div>
         <div class="room-sub">Private · Tap to open</div>
       </div>
-      ${count > 0 ? `<div class="badge">${count > 99 ? "99+" : count}</div>` : '<div class="badge hidden">0</div>'}
+      <div class="badge ${count === 0 ? "hidden" : ""}">${count > 99 ? "99+" : count}</div>
     `;
     btn.onclick = () => enterPrivateRoom(room.id, room.with);
     list.appendChild(btn);
@@ -186,71 +388,55 @@ function renderRoomsList() {
 }
 
 // ─── UNREAD TRACKING ───────────────────────────────────────────────
-
-// We track the latest timestamp we've "seen" per room in localStorage
-function getSeenTimestamp(roomKey) {
-  return parseInt(localStorage.getItem("seen_" + roomKey) || "0", 10);
+function getSeenTs(key) {
+  return parseInt(localStorage.getItem("nc_seen_" + key) || "0", 10);
 }
-
-function setSeenTimestamp(roomKey, ts) {
-  localStorage.setItem("seen_" + roomKey, String(ts));
+function setSeenTs(key, ts) {
+  localStorage.setItem("nc_seen_" + key, String(ts));
 }
-
-function markRead(roomKey) {
-  setSeenTimestamp(roomKey, Date.now());
-  unreadCounts[roomKey] = 0;
+function markRead(key) {
+  setSeenTs(key, Date.now());
+  unreadCounts[key] = 0;
   updateBadges();
 }
 
 function startUnreadListener(roomKey, collectionPath) {
-  // Don't double-subscribe
   if (unsubUnread[roomKey]) return;
-
-  const seenAt = getSeenTimestamp(roomKey);
-
   unsubUnread[roomKey] = db.collection(collectionPath)
     .orderBy("timestamp")
     .onSnapshot(snapshot => {
-      if (activeRoom === (roomKey === "global" ? "global" : "private:" + roomKey)) {
-        // Room is open — mark all read
-        markRead(roomKey);
-        return;
-      }
+      const isActive = activeRoom === (roomKey === "global" ? "global" : "private:" + roomKey);
+      if (isActive) { markRead(roomKey); return; }
 
       let count = 0;
       snapshot.forEach(doc => {
         const data = doc.data();
         if (!data.timestamp) return;
-        const msgTs = data.timestamp.toMillis();
-        if (msgTs > getSeenTimestamp(roomKey) && data.user !== currentUser) count++;
+        if (data.timestamp.toMillis() > getSeenTs(roomKey) && data.user !== currentUser.username)
+          count++;
       });
-
       unreadCounts[roomKey] = count;
       updateBadges();
-    }, err => console.error("Unread listener error:", err));
+    }, err => console.error("Unread listener:", err));
 }
 
 function updateBadges() {
-  // Global nav badge
   const globalCount = unreadCounts["global"] || 0;
-  let globalBadge = $("badge-global");
+  const globalBadge = $("badge-global");
   if (globalBadge) {
     globalBadge.textContent = globalCount > 99 ? "99+" : globalCount;
     globalBadge.classList.toggle("hidden", globalCount === 0);
   }
 
-  // Private rooms nav badge (sum of all private unreads)
   const privateTotal = Object.entries(unreadCounts)
     .filter(([k]) => k !== "global")
-    .reduce((sum, [, v]) => sum + v, 0);
-
-  let privateBadge = $("badge-rooms");
-  if (privateBadge) {
-    privateBadge.textContent = privateTotal > 99 ? "99+" : privateTotal;
-    privateBadge.classList.toggle("hidden", privateTotal === 0);
+    .reduce((s, [, v]) => s + v, 0);
+  const roomsBadge = $("badge-rooms");
+  if (roomsBadge) {
+    roomsBadge.textContent = privateTotal > 99 ? "99+" : privateTotal;
+    roomsBadge.classList.toggle("hidden", privateTotal === 0);
   }
 
-  // Per-room badges inside the rooms list
   visitedRooms.forEach(room => {
     const item = $("room-item-" + room.id);
     if (!item) return;
@@ -267,13 +453,14 @@ function sendMessage() {
   const text = $("messageInput").value.trim();
   if (!text || !currentUser || !activeRoom) return;
 
-  const collectionPath = activeRoom === "global"
+  const path = activeRoom === "global"
     ? "messages"
     : "privateRooms/" + activeRoom.replace("private:", "") + "/messages";
 
-  db.collection(collectionPath).add({
+  db.collection(path).add({
     text,
-    user: currentUser,
+    user: currentUser.username,
+    uid: currentUser.uid,
     timestamp: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(err => {
     showChatError("Failed to send. Check Firestore rules.");
@@ -298,10 +485,7 @@ function startMessageListener(collectionPath) {
       if (welcome && snapshot.size > 0) welcome.remove();
 
       snapshot.docChanges().forEach(change => {
-        const doc  = change.doc;
-        const data = doc.data();
-        const id   = doc.id;
-
+        const doc = change.doc, data = doc.data(), id = doc.id;
         if (change.type === "added" && !renderedIds.has(id)) {
           renderedIds.add(id);
           const time = data.timestamp
@@ -309,30 +493,25 @@ function startMessageListener(collectionPath) {
             : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
           renderMessage(data, id, time);
         }
-
         if (change.type === "modified" && data.timestamp) {
-          const timeEl = $("chat").querySelector(`[data-id="${id}"] .msg-time`);
-          if (timeEl) timeEl.textContent = new Date(data.timestamp.toMillis())
+          const el = $("chat").querySelector(`[data-id="${id}"] .msg-time`);
+          if (el) el.textContent = new Date(data.timestamp.toMillis())
             .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         }
       });
-
       $("chat").scrollTop = $("chat").scrollHeight;
-
     }, err => {
-      console.error("Firestore error:", err);
+      console.error("Firestore:", err);
       showChatError("Could not connect. Check Firestore rules.");
     });
 }
 
 // ─── RENDER BUBBLE ─────────────────────────────────────────────────
 function renderMessage(data, id, time) {
-  const isMine = data.user === currentUser;
-
+  const isMine = data.uid === currentUser.uid || data.user === currentUser.username;
   const wrapper = document.createElement("div");
   wrapper.classList.add("msg-wrapper", isMine ? "mine" : "theirs");
   wrapper.dataset.id = id;
-
   const bubble = document.createElement("div");
   bubble.classList.add("bubble");
   bubble.innerHTML = `
@@ -340,7 +519,6 @@ function renderMessage(data, id, time) {
     <div class="msg-text">${escapeHtml(data.text)}</div>
     <div class="msg-time">${time}</div>
   `;
-
   wrapper.appendChild(bubble);
   $("chat").appendChild(wrapper);
 }
@@ -348,33 +526,22 @@ function renderMessage(data, id, time) {
 // ─── CLEAR MY MESSAGES ─────────────────────────────────────────────
 async function clearChat() {
   if (!confirm("Delete all your messages in this chat?")) return;
-
-  const collectionPath = activeRoom === "global"
+  const path = activeRoom === "global"
     ? "messages"
     : "privateRooms/" + activeRoom.replace("private:", "") + "/messages";
-
   try {
-    const snapshot = await db.collection(collectionPath)
-      .where("user", "==", currentUser)
-      .get();
-
-    if (snapshot.empty) {
-      showChatError("You have no messages to delete here.");
-      return;
-    }
-
+    const snap = await db.collection(path).where("user", "==", currentUser.username).get();
+    if (snap.empty) return showChatError("You have no messages to delete here.");
     const batch = db.batch();
-    snapshot.forEach(doc => batch.delete(doc.ref));
+    snap.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
-
-    snapshot.forEach(doc => {
+    snap.forEach(doc => {
       const el = $("chat").querySelector(`[data-id="${doc.id}"]`);
       if (el) el.remove();
       renderedIds.delete(doc.id);
     });
-
   } catch(err) {
-    showChatError("Could not delete your messages. Check Firestore rules.");
+    showChatError("Could not delete messages. Check Firestore rules.");
     console.error(err);
   }
 }
@@ -386,21 +553,18 @@ function resetChat() {
   $("chat").innerHTML = '<div class="welcome-msg">👋 Say something...</div>';
 }
 
-function showFormError(el, msg) {
-  el.textContent = msg;
-  el.classList.remove("hidden");
-}
-
 function showChatError(msg) {
   const wrap = document.createElement("div");
   wrap.className = "error-banner";
-  wrap.innerHTML = `
-    <span>${escapeHtml(msg)}</span>
-    <button class="error-close" onclick="this.parentElement.remove()" title="Dismiss">✕</button>
-  `;
+  wrap.innerHTML = `<span>${escapeHtml(msg)}</span><button class="error-close" onclick="this.parentElement.remove()">✕</button>`;
   $("chat").prepend(wrap);
 }
 
 function escapeHtml(str) {
   return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
 }

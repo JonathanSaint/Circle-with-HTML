@@ -12,7 +12,56 @@
 
   <div class="app">
 
-    <!-- ── Sidebar ── -->
+    <!-- ════════════════════════════════════
+         AUTH SCREEN
+    ════════════════════════════════════ -->
+    <div id="auth-screen" class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-logo">📍 NearbyChat</div>
+        <p class="auth-tagline">Chat with people nearby</p>
+
+        <!-- Tab switcher -->
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-signin" onclick="switchTab('signin')">Sign In</button>
+          <button class="auth-tab" id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+        </div>
+
+        <!-- Sign In -->
+        <div id="form-signin" class="auth-form">
+          <div class="field-wrap">
+            <input id="si-username" type="text" placeholder="Username" autocomplete="username" maxlength="32" />
+          </div>
+          <div class="field-wrap">
+            <input id="si-password" type="password" placeholder="Password" autocomplete="current-password" />
+            <button class="toggle-pw" type="button" onclick="togglePw('si-password', this)">👁</button>
+          </div>
+          <div id="si-error" class="field-error hidden"></div>
+          <button class="primary-btn" id="si-btn" onclick="signIn()">Sign In</button>
+        </div>
+
+        <!-- Sign Up -->
+        <div id="form-signup" class="auth-form hidden">
+          <div class="field-wrap">
+            <input id="su-username" type="text" placeholder="Choose a username" autocomplete="username" maxlength="32" />
+            <span id="su-username-status" class="field-status"></span>
+          </div>
+          <div id="su-username-error" class="field-error hidden"></div>
+          <div class="field-wrap">
+            <input id="su-password" type="password" placeholder="Password (any length)" autocomplete="new-password" />
+            <button class="toggle-pw" type="button" onclick="togglePw('su-password', this)">👁</button>
+          </div>
+          <div class="field-wrap">
+            <input id="su-password2" type="password" placeholder="Confirm password" autocomplete="new-password" />
+          </div>
+          <div id="su-error" class="field-error hidden"></div>
+          <button class="primary-btn" id="su-btn" onclick="signUp()">Create Account</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════
+         MAIN APP
+    ════════════════════════════════════ -->
     <aside id="sidebar">
       <div class="sidebar-header">
         <span class="logo">📍 NearbyChat</span>
@@ -30,27 +79,27 @@
       <nav class="sidebar-nav">
         <button class="nav-btn active" id="nav-global" onclick="openGlobalChat()">
           🌐 <span>Global Chat</span>
+          <div class="badge hidden" id="badge-global">0</div>
         </button>
         <button class="nav-btn" id="nav-rooms" onclick="showRoomsPanel()">
           💬 <span>Private Rooms</span>
+          <div class="badge hidden" id="badge-rooms">0</div>
         </button>
       </nav>
 
       <div class="sidebar-bottom">
-        <button class="nav-btn danger" onclick="changeUsername()">✏️ Change Name</button>
+        <button class="nav-btn danger" onclick="signOut()">↪ Sign Out</button>
+        <button class="nav-btn danger" onclick="deleteAccount()">🗑 Delete Account</button>
       </div>
     </aside>
 
-    <!-- ── Sidebar overlay ── -->
     <div id="sidebar-overlay" class="hidden" onclick="toggleSidebar()"></div>
 
-    <!-- ── Main panel ── -->
-    <div class="main">
+    <div class="main" id="main-panel">
 
-      <!-- Header -->
       <header>
         <div class="header-left">
-          <button class="icon-btn" id="menuBtn" onclick="toggleSidebar()">☰</button>
+          <button class="icon-btn" onclick="toggleSidebar()">☰</button>
           <div>
             <div id="chat-title" class="chat-title">Global Chat</div>
             <div id="chat-subtitle" class="chat-subtitle"></div>
@@ -61,37 +110,23 @@
         </div>
       </header>
 
-      <!-- Name entry screen (shown before username is set) -->
-      <div id="name-screen" class="name-screen">
-        <div class="name-card">
-          <div class="name-logo">📍 NearbyChat</div>
-          <p class="name-tagline">Chat with people nearby</p>
-          <input id="username-input" type="text" placeholder="Choose a username..." maxlength="24" autocomplete="off" />
-          <button class="primary-btn" onclick="setUsername()">Join Chat</button>
-          <div id="name-error" class="form-error hidden"></div>
-        </div>
-      </div>
-
-      <!-- Rooms panel -->
       <div id="rooms-panel" class="rooms-panel hidden">
         <div class="rooms-inner">
           <h3>Private Rooms</h3>
           <p class="rooms-hint">Start a private conversation with any user by their username.</p>
           <div class="new-room-row">
-            <input id="room-username-input" placeholder="Enter username..." maxlength="24" autocomplete="off" />
+            <input id="room-username-input" placeholder="Enter username..." maxlength="32" autocomplete="off" />
             <button class="primary-btn sm" onclick="openPrivateRoom()">Open Chat</button>
           </div>
-          <div id="room-error" class="form-error hidden"></div>
+          <div id="room-error" class="field-error hidden" style="margin-bottom:8px"></div>
           <div id="rooms-list"></div>
         </div>
       </div>
 
-      <!-- Chat area -->
       <div id="chat" class="chat-area">
         <div class="welcome-msg">👋 Say something to people nearby...</div>
       </div>
 
-      <!-- Input bar -->
       <div class="input-area" id="input-area">
         <input id="messageInput" placeholder="Type a message..." autocomplete="off" disabled />
         <button id="sendBtn" onclick="sendMessage()" disabled>
@@ -102,10 +137,9 @@
         </button>
       </div>
 
-    </div><!-- /main -->
-  </div><!-- /app -->
+    </div>
+  </div>
 
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>
